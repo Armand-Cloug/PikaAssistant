@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "pikasistant",
+  "productName": "PikAsistant",
   "version": "0.1.0",
   "identifier": "fr.cloug.PikAsistant",
   "build": {
@@ -12,9 +12,19 @@
   "app": {
     "windows": [
       {
-        "title": "pikasistant",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "PikAsistant",
+        "width": 320,
+        "height": 480,
+        "minWidth": 320,
+        "minHeight": 400,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "visible": true
       }
     ],
     "security": {
@@ -23,13 +33,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

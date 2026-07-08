@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude
+CLAUDE.md
+AGENTS.md
+.claude
+CDC.md

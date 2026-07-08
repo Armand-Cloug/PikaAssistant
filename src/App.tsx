@@ -1,51 +1,141 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+import { useApp } from "./store";
+import { t, type TKey } from "./i18n";
+import { applyExpandedMode, applyWidgetMode } from "./lib/windowMode";
+import { setSoundEnabled, sfx } from "./lib/sound";
+import { ArcMark, Brackets, Clock } from "./components/Hud";
+import TodoPanel from "./components/TodoPanel";
+import ChatPanel from "./components/ChatPanel";
+import SettingsPanel from "./components/SettingsPanel";
+import ShortcutBar from "./components/ShortcutBar";
+import type { Mode, Tab } from "./types";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+function hexToRgb(hex: string): string {
+  const h = hex.replace("#", "");
+  const full =
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n) || full.length !== 6) return "62, 198, 255";
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
 }
 
-export default App;
+export default function App() {
+  const { ready, settings, setPendingPrompt } = useApp();
+  const [mode, setMode] = useState<Mode>("widget");
+  const [tab, setTab] = useState<Tab>("todo");
+  const lang = settings.lang;
+
+  // Thème : la couleur d'accent recolore toute l'interface via variables CSS.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--accent", settings.accent);
+    root.style.setProperty("--accent-rgb", hexToRgb(settings.accent));
+  }, [settings.accent]);
+
+  useEffect(() => {
+    setSoundEnabled(settings.sound);
+  }, [settings.sound]);
+
+  // Mode widget : (re)positionnement quand écran/coin changent.
+  useEffect(() => {
+    if (!ready || mode !== "widget") return;
+    void applyWidgetMode(settings.corner, settings.monitorIndex);
+  }, [ready, mode, settings.corner, settings.monitorIndex]);
+
+  const expand = useCallback(() => {
+    sfx.open();
+    setMode("expanded");
+    void applyExpandedMode();
+  }, []);
+
+  const reduce = useCallback(() => {
+    sfx.close();
+    setTab((current) => (current === "settings" ? "todo" : current));
+    setMode("widget"); // l'effet ci-dessus applique taille + position
+  }, []);
+
+  const onPromptShortcut = useCallback(
+    (text: string) => {
+      setTab("chat");
+      setPendingPrompt(text);
+    },
+    [setPendingPrompt]
+  );
+
+  if (!ready) return null;
+
+  const isWidget = mode === "widget";
+  const tabs: Tab[] = isWidget ? ["todo", "chat"] : ["todo", "chat", "settings"];
+
+  return (
+    <div className={`app ${isWidget ? "is-widget" : "is-expanded"}`}>
+      <div className="hud-panel">
+        <Brackets />
+        <div className="scan-sweep" aria-hidden="true" />
+
+        <header className="hud-header" data-tauri-drag-region>
+          <div className="hud-id" data-tauri-drag-region>
+            <ArcMark />
+            <div className="hud-titles" data-tauri-drag-region>
+              <span className="hud-name" data-tauri-drag-region>
+                {settings.assistantName || "PIKA"}
+              </span>
+              <span className="hud-status" data-tauri-drag-region>
+                <span className="dot" /> {t(lang, "header.online")}
+              </span>
+            </div>
+          </div>
+          <div className="hud-right">
+            <Clock />
+            {isWidget ? (
+              <button
+                className="icon-btn"
+                title={t(lang, "header.expand")}
+                onClick={expand}
+              >
+                ⤢
+              </button>
+            ) : (
+              <button
+                className="icon-btn"
+                title={t(lang, "header.reduce")}
+                onClick={reduce}
+              >
+                ⤡
+              </button>
+            )}
+          </div>
+        </header>
+
+        <nav className="tabbar">
+          {tabs.map((tb) => (
+            <button
+              key={tb}
+              className={`tab ${tab === tb ? "active" : ""}`}
+              onClick={() => {
+                sfx.click();
+                setTab(tb);
+              }}
+            >
+              {t(lang, `tabs.${tb}` as TKey)}
+            </button>
+          ))}
+        </nav>
+
+        <main className="content">
+          {tab === "todo" && <TodoPanel />}
+          {tab === "chat" && <ChatPanel />}
+          {tab === "settings" && !isWidget && <SettingsPanel />}
+        </main>
+
+        {!isWidget && <ShortcutBar onPrompt={onPromptShortcut} />}
+      </div>
+    </div>
+  );
+}
